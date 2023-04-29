@@ -8,7 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
-
+use App\Http\Services\FCMService;
 class AuthController extends BaseController
 {
 
@@ -19,6 +19,7 @@ class AuthController extends BaseController
             'name' => 'required',
             'email' => 'required|string|email|max:255',
             'password' => 'required|string|min:6',
+            'FCM_token' => 'required|string',
         ]);
 
         if ($validator->fails()) {
@@ -28,6 +29,13 @@ class AuthController extends BaseController
         $input = $request->all();
         $input['password'] = Hash::make($request['password']);
         $user = User::create($input);
+        FCMService::send(
+            $user->FCM_token,
+            [
+                'title' => 'welcome',
+                'body' => 'thinks for use our app',
+            ]
+        );
         $success['token'] =  $user->createToken('MyApp')->accessToken;
         return $this->sendResponse($success, 'User register successfully.');
     }
@@ -36,16 +44,26 @@ class AuthController extends BaseController
     {
         $validator = Validator::make($request->all(), [
             'password' => 'required',
-            'email' => 'required|string|email|max:255'
+            'email' => 'required|string|email|max:255',
+            'FCM_token' => 'required|string'
         ]);
 
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors(), 403);
         }
 
+
         if (Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
             $user = Auth::user();
+            $user->FCM_token=$request->FCM_token;
             $success['token'] =  $user->createToken('MyApp')->accessToken;
+            FCMService::send(
+                $user->FCM_token,
+                [
+                    'title' => 'Hi',
+                    'body' => 'Welcome Back',
+                ]
+            );
             return $this->sendResponse($success, 'User login successfully.');
         } else {
             return $this->sendError('Unauthorised.', ['error' => 'Unauthorised']);
